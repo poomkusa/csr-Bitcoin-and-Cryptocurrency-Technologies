@@ -15,6 +15,7 @@ public class BlockChain {
         for (BlockNode b : _blockchain) {
             if (b._height > currentMaxHeightNode._height) {
                 currentMaxHeightNode = b;
+            //if b is same height as current last block, currentMaxHeightNode is the block that came earlier.
             } else if (b._height == currentMaxHeightNode._height) {
                 if (currentMaxHeightNode._createAt.after(b._createAt)) {
                     currentMaxHeightNode = b;
@@ -24,8 +25,10 @@ public class BlockChain {
         _maxHeightNode = currentMaxHeightNode;
     }
 
+    //blockhash is an arbitrary has value hash (which typically found in hash pointer of a block's header, thus getParentNode).
     public BlockNode getParentNode(byte[] blockHash) {
         ByteArrayWrapper b1 = new ByteArrayWrapper(blockHash);
+        //for each block in the blockchain, compare its hash to blockhash.
         for (BlockNode b : _blockchain) {
             ByteArrayWrapper b2 = new ByteArrayWrapper(b._block.getHash());
             if (b1.equals(b2)) {
@@ -35,6 +38,7 @@ public class BlockChain {
         return null;
     }
 
+    //height is the position of the latest block.
     public class BlockNode {
         private Block _block;
         private int _height = 0;
@@ -66,13 +70,16 @@ public class BlockChain {
     public BlockChain(Block genesisBlock) {
         UTXOPool utxoPool = new UTXOPool();
         TransactionPool transPool = new TransactionPool();
+        //for each output in coinbase transaction, add unspent coin into the pool.
         for (int i = 0; i < genesisBlock.getCoinbase().numOutputs(); i++) {
-            utxoPool.addUTXO(new UTXO(genesisBlock.getCoinbase().getHash(),i),genesisBlock.getCoinbase().getOutput(i));
+            utxoPool.addUTXO(new UTXO(genesisBlock.getCoinbase().getHash(),i), genesisBlock.getCoinbase().getOutput(i));
         }
         transPool.addTransaction(genesisBlock.getCoinbase());
+        //for each transactions in the genesis block,
         for (Transaction t : genesisBlock.getTransactions()) {
             if (t != null) {
-                for (int i=0;i<t.numOutputs();i++) {
+                //for each output in a transaction, creat new unspent coin and add to the pool.
+                for (int i=0; i<t.numOutputs(); i++) {
                     Transaction.Output output = t.getOutput(i);
                     UTXO utxo = new UTXO(t.getHash(),i);
                     utxoPool.addUTXO(utxo,output);
@@ -122,28 +129,30 @@ public class BlockChain {
         if(parentNode == null) {
             return false;
         }
-        //compare height
+        //if this block height <= current height - CUT_OFF_AGE, do not add block.
         int blockHeight = parentNode._height+1;
-        if (blockHeight <= _maxHeightNode._height - CUT_OFF_AGE) {
+        if (blockHeight <= _maxHeightNode._height - CUT_OFF_AGE, do not add block.) {
             return false;
         }
 
         //check all transactions in block are valid?
+        //get pools from previous block.
         UTXOPool utxoPool = new UTXOPool(parentNode.getUTXOPool());
         TransactionPool transPool = new TransactionPool(parentNode.getTransactionPool());
+        //for each transaction in this block,
         for (Transaction t : block.getTransactions()) {
             TxHandler txHandler = new TxHandler(utxoPool);
             if (!txHandler.isValidTx(t)) {
                 return false;
             }
-            //remove used utxo
+            //for each input in a transaction, remove it from current unspent transactions pool.
             for (Transaction.Input input : t.getInputs()) {
                 int outputIndex = input.outputIndex;
                 byte[] prevTxHash = input.prevTxHash;
                 UTXO utxo = new UTXO(prevTxHash, outputIndex);
                 utxoPool.removeUTXO(utxo);
             }
-            //add new utxo
+            //for each output in a transaction, add it to current unspent transactions pool.
             byte[] hash = t.getHash();
             for (int i=0;i<t.numOutputs();i++) {
                 UTXO utxo = new UTXO(hash, i);
@@ -151,19 +160,19 @@ public class BlockChain {
             }
         }
 
-        //update utxo transaction coinbase
+        //add coinbase to current unspent transactions pool.
         for (int i = 0; i < block.getCoinbase().numOutputs(); i++) {
             utxoPool.addUTXO(new UTXO(block.getCoinbase().getHash(),i),block.getCoinbase().getOutput(i));
         }
 
-        //remove trans pool
+        //remove transactions pool
         for (Transaction t : block.getTransactions()) {
             transPool.removeTransaction(t.getHash());
         }
 
         //add new block
         BlockNode b = new BlockNode(block,blockHeight,utxoPool,transPool);
-        boolean addNewBlock = _blockchain.add(b);
+        boolean addNewBlock = _blockchain.add(b); //add new block to _blockchain (arrayList) and assign true to addNewBlock (ArrayList always accept elements, so always return true).
         if (addNewBlock) {
             updateMaxHeightNode();
         }
